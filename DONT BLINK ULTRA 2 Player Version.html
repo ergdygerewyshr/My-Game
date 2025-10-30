@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+
+<style id="webmakerstyle">
+
+</style>
+</head>
+<body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Don't Blink: 2 Player Survival 👁️</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: black;
+    height: 100%;
+    width: 100%;
+    cursor: none;
+    font-family: 'Courier New', monospace;
+    color: red;
+    touch-action: none;
+  }
+
+  .flashlight {
+    position: absolute;
+    pointer-events: none;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,200,0.5) 0%, rgba(0,0,0,0.95) 70%);
+    box-shadow: 0 0 100px 60px rgba(255,255,200,0.15);
+    transition: width 0.2s, height 0.2s;
+  }
+  #flashlight1 { filter: hue-rotate(0deg); }
+  #flashlight2 { filter: hue-rotate(180deg); }
+
+  .monster {
+    position: absolute;
+    width: 100px;
+    height: 130px;
+    background: url('https://static.wikia.nocookie.net/markiplier/images/4/45/3_scary_games_18_th.jpg') center/cover no-repeat;
+    opacity: 0;
+    filter: brightness(0.7) contrast(1.2);
+    transition: opacity 0.3s, filter 0.3s;
+  }
+
+  #jumpscareScreen {
+    position: fixed;
+    inset: 0;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    background: black;
+  }
+
+  #jumpscareImg {
+    width: 0;
+    height: 0;
+    object-fit: cover;
+    opacity: 0;
+    transition: all 0.2s ease;
+  }
+
+  @keyframes shake {
+    0% { transform: translate(0,0) rotate(0deg); }
+    20% { transform: translate(-20px,10px) rotate(-3deg); }
+    40% { transform: translate(15px,-15px) rotate(2deg); }
+    60% { transform: translate(-10px,20px) rotate(-1deg); }
+    80% { transform: translate(10px,-10px) rotate(3deg); }
+    100% { transform: translate(0,0) rotate(0deg); }
+  }
+
+  #deathText {
+    position: fixed;
+    inset: 0;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 2500;
+    color: white;
+    font-size: 40px;
+    text-align: center;
+    background: rgba(0,0,0,0.85);
+  }
+
+  #hud {
+    position: absolute;
+    bottom: 20px;
+    width: 100%;
+    text-align: center;
+    font-size: 20px;
+    color: rgba(255,0,0,0.8);
+  }
+
+  #timer {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    font-size: 18px;
+  }
+
+  button {
+    position: absolute;
+    left: 50%;
+    top: 60%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    padding: 15px 30px;
+    background: red;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 10px;
+    z-index: 3000;
+  }
+
+  #retryBtn { display: none; }
+
+  #flashOverlay {
+    position: fixed;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2600;
+    transition: opacity 0.2s;
+  }
+</style>
+</head>
+<body>
+<div id="flashlight1" class="flashlight"></div>
+<div id="flashlight2" class="flashlight"></div>
+
+<div id="jumpscareScreen">
+  <img id="jumpscareImg" src="https://static.wikia.nocookie.net/markiplier/images/4/45/3_scary_games_18_th.jpg" alt="Jumpscare Face">
+</div>
+<div id="flashOverlay"></div>
+<div id="deathText">It found you....<br>Retry to restart</div>
+<div id="hud">Player 1: WASD | Player 2: Arrow Keys</div>
+<div id="timer">Time: 0s</div>
+
+<button id="startBtn">START</button>
+<button id="retryBtn">RETRY</button>
+
+<audio id="breath" src="https://cdn.pixabay.com/audio/2021/09/23/audio_7b0adac8f3.mp3"></audio>
+<audio id="scream" src="https://cdn.pixabay.com/audio/2021/09/16/audio_3e18ef8fd3.mp3"></audio>
+<audio id="heartbeat" src="https://cdn.pixabay.com/audio/2022/02/10/audio_3ab8e78737.mp3"></audio>
+
+<script>
+const f1 = document.getElementById('flashlight1');
+const f2 = document.getElementById('flashlight2');
+const startBtn = document.getElementById('startBtn');
+const retryBtn = document.getElementById('retryBtn');
+const jumpscareScreen = document.getElementById('jumpscareScreen');
+const jumpscareImg = document.getElementById('jumpscareImg');
+const flashOverlay = document.getElementById('flashOverlay');
+const deathText = document.getElementById('deathText');
+const hud = document.getElementById('hud');
+const timerEl = document.getElementById('timer');
+const breath = document.getElementById('breath');
+const scream = document.getElementById('scream');
+const heartbeat = document.getElementById('heartbeat');
+
+let width = window.innerWidth;
+let height = window.innerHeight;
+
+const p1 = { x: width / 3, y: height / 2, alive: true };
+const p2 = { x: width * 2 / 3, y: height / 2, alive: true };
+
+let alive = false;
+let scareActive = false;
+let monsters = [];
+let monsterInterval, spawnInterval, timerInterval;
+let survived = 0;
+const keys = {};
+
+document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function movePlayers() {
+  const speed = 10; // 🔥 faster flashlight movement
+  if (keys['w']) p1.y -= speed;
+  if (keys['s']) p1.y += speed;
+  if (keys['a']) p1.x -= speed;
+  if (keys['d']) p1.x += speed;
+
+  if (keys['arrowup']) p2.y -= speed;
+  if (keys['arrowdown']) p2.y += speed;
+  if (keys['arrowleft']) p2.x -= speed;
+  if (keys['arrowright']) p2.x += speed;
+
+  [p1, p2].forEach(p => {
+    p.x = Math.max(0, Math.min(width - 150, p.x));
+    p.y = Math.max(0, Math.min(height - 150, p.y));
+  });
+
+  f1.style.left = `${p1.x}px`;
+  f1.style.top = `${p1.y}px`;
+  f2.style.left = `${p2.x}px`;
+  f2.style.top = `${p2.y}px`;
+}
+
+function spawnMonster() {
+  const m = document.createElement('div');
+  m.classList.add('monster');
+  document.body.appendChild(m);
+  monsters.push({ el: m, x: Math.random() * width, y: Math.random() * height, speed: 0.6 }); // 🧟 slower monsters
+}
+
+function updateMonsters() {
+  if (!alive) return;
+  movePlayers();
+  monsters.forEach(mon => {
+    const d1 = Math.hypot(p1.x - mon.x, p1.y - mon.y);
+    const d2 = Math.hypot(p2.x - mon.x, p2.y - mon.y);
+    const target = d1 < d2 ? p1 : p2;
+    const dx = target.x - mon.x;
+    const dy = target.y - mon.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+      mon.x += (dx / dist) * mon.speed * 10;
+      mon.y += (dy / dist) * mon.speed * 10;
+    }
+    mon.el.style.left = `${mon.x}px`;
+    mon.el.style.top = `${mon.y}px`;
+    mon.el.style.opacity = 0.3 + Math.random() * 0.3;
+
+    if (dist < 80 && !scareActive) jumpscare(target === p1 ? 1 : 2);
+  });
+}
+
+function jumpscare(playerNum) {
+  scareActive = true;
+  alive = false;
+  scream.play();
+  heartbeat.pause(); breath.pause();
+  document.body.style.animation = 'shake 0.4s';
+  jumpscareScreen.style.display = 'flex';
+  jumpscareImg.style.width = '100%';
+  jumpscareImg.style.height = '100%';
+  jumpscareImg.style.opacity = '1';
+  hud.style.display = 'none';
+  f1.style.display = 'none';
+  f2.style.display = 'none';
+
+  flashOverlay.style.opacity = 1;
+  setTimeout(()=>{ flashOverlay.style.opacity=0; },400);
+
+  clearInterval(monsterInterval);
+  clearInterval(spawnInterval);
+  clearInterval(timerInterval);
+
+  setTimeout(()=> {
+    jumpscareScreen.style.display='none';
+    deathText.innerHTML = `Player ${playerNum} was caught...<br>Retry to restart`;
+    deathText.style.display='flex';
+    retryBtn.style.display='block';
+    document.body.style.animation='';
+  },1200);
+}
+
+function startGame() {
+  startBtn.style.display='none';
+  retryBtn.style.display='none';
+  deathText.style.display='none';
+  jumpscareScreen.style.display='none';
+  f1.style.display='block';
+  f2.style.display='block';
+  hud.style.display='block';
+  flashOverlay.style.opacity=0;
+
+  monsters.forEach(m => m.el.remove());
+  monsters = [];
+  survived = 0;
+  alive = true;
+  scareActive = false;
+
+  timerEl.innerText="Time: 0s";
+  hud.innerText="Player 1: WASD | Player 2: Arrow Keys";
+
+  breath.loop=true; breath.volume=0.3; breath.play();
+  heartbeat.loop=true; heartbeat.volume=0.1; heartbeat.play();
+
+  spawnMonster();
+  monsterInterval=setInterval(updateMonsters,50);
+  spawnInterval=setInterval(spawnMonster,10000);
+  timerInterval=setInterval(()=>{ survived++; timerEl.innerText=`Time: ${survived}s`; },1000);
+}
+
+startBtn.addEventListener('click',startGame);
+retryBtn.addEventListener('click',startGame);
+</script>
+</body>
+</html>
+
+
+
+</body>
+</html>
