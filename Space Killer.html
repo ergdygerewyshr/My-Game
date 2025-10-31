@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+
+<style id="webmakerstyle">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Shooter Game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="game" width="800" height="600"></canvas>
+    <div id="gui">
+        <div id="hud"></div>
+        <div id="inventory"></div>
+        <div id="shop">
+            <h4>Shop</h4>
+            <button onclick="buyItem('Spread Shot',200)">Spread Shot - 200</button><br>
+            <button onclick="buyItem('Fast Shoot',300)">Fast Shoot - 300</button>
+        </div>
+    </div>
+<script src="game.js"></script>
+</body>
+</html>
+
+</style>
+</head>
+<body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Shooter Game</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="game" width="800" height="600"></canvas>
+    <div id="gui">
+        <div id="hud"></div>
+        <div id="inventory"></div>
+        <div id="shop">
+            <h4>Shop</h4>
+            <button onclick="buyItem('Spread Shot',200)">Spread Shot - 200</button><br>
+            <button onclick="buyItem('Fast Shoot',300)">Fast Shoot - 300</button>
+        </div>
+    </div>
+<script src="game.js"></script>
+</body>
+</html>
+
+
+<script>const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// ===== Player =====
+const player = {
+    x: canvas.width/2,
+    y: canvas.height-50,
+    width: 20,
+    height: 20,
+    bullets: [],
+    speed: 6,
+    weapon: 'Normal',
+    fireRate: 500,
+    lastShot: 0
+};
+
+// ===== Stars =====
+const stars = [];
+for(let i=0;i<150;i++){
+    stars.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: Math.random()*2+1});
+}
+
+// ===== Meteorites =====
+const blocks = [];
+function spawnBlock(){
+    const size = Math.random()*30+20;
+    blocks.push({
+        x: Math.random()*(canvas.width-size),
+        y: -size,
+        width: size,
+        height: size,
+        speed: Math.random()*2+1,
+        color: 'orange'
+    });
+}
+
+// ===== Score & Money =====
+let score=0;
+let money=0;
+
+// ===== Inventory =====
+const inventory = {}; // store items like Spread, Fast
+
+// ===== Input =====
+const keys = {};
+let spacePressed = false;
+
+document.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if(e.code==='Space' && !spacePressed){
+        spacePressed = true;
+        fireBullet();
+    }
+});
+document.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+    if(e.code==='Space') spacePressed = false;
+});
+
+// ===== Shop =====
+function updateInventory(){
+    const invDiv = document.getElementById('inventory');
+    invDiv.innerHTML='<h4>Inventory:</h4>';
+    for(const item in inventory){
+        invDiv.innerHTML+=`${item} x ${inventory[item]}<br>`;
+    }
+}
+
+function buyItem(item, cost){
+    if(money>=cost){
+        money-=cost;
+        inventory[item]=(inventory[item]||0)+1;
+        if(item==='Spread Shot' || item==='Fast Shoot') player.weapon=item;
+        updateInventory();
+    }
+}
+
+// ===== Shooting =====
+function autoAim(){
+    if(blocks.length===0) return {x:player.x, y:0};
+    let nearest = blocks[0];
+    let minDist = Math.hypot(nearest.x-player.x, nearest.y-player.y);
+    for(const b of blocks){
+        const d = Math.hypot(b.x+ b.width/2 - player.x, b.y+ b.height/2 - player.y);
+        if(d<minDist){ nearest=b; minDist=d; }
+    }
+    return {x: nearest.x+nearest.width/2, y: nearest.y+nearest.height/2};
+}
+
+function fireBullet(){
+    const now = Date.now();
+    if(now - player.lastShot < player.fireRate) return; 
+    player.lastShot = now;
+
+    const target = autoAim();
+    const angle = Math.atan2(target.y-player.y, target.x-player.x);
+
+    if(player.weapon==='Normal'){
+        player.bullets.push({x:player.x,y:player.y,vx:Math.cos(angle)*7,vy:Math.sin(angle)*7});
+    } else if(player.weapon==='Spread Shot'){
+        for(let i=-1;i<=1;i++){
+            let spreadAngle = angle + i*0.2;
+            player.bullets.push({x:player.x,y:player.y,vx:Math.cos(spreadAngle)*7,vy:Math.sin(spreadAngle)*7});
+        }
+    } else if(player.weapon==='Fast Shoot'){
+        for(let i=0;i<2;i++){
+            player.bullets.push({x:player.x,y:player.y,vx:Math.cos(angle)*10,vy:Math.sin(angle)*10});
+        }
+    }
+}
+
+// ===== Draw =====
+function drawStars(){
+    ctx.fillStyle='white';
+    stars.forEach(s=>{
+        ctx.fillRect(s.x, s.y, s.size, s.size);
+        s.y+=0.2;
+        if(s.y>canvas.height){
+            s.y=0;
+            s.x=Math.random()*canvas.width;
+            score = Math.max(0, score-1);
+        }
+    });
+}
+
+function drawPlayer(){
+    ctx.fillStyle='lime';
+    ctx.fillRect(player.x-player.width/2, player.y-player.height/2, player.width, player.height);
+}
+
+function drawBlocks(){
+    blocks.forEach(b=>{
+        ctx.fillStyle=b.color;
+        ctx.beginPath();
+        ctx.moveTo(b.x+b.width/2,b.y);
+        ctx.lineTo(b.x+b.width,b.y+b.height/2);
+        ctx.lineTo(b.x+b.width/2,b.y+b.height);
+        ctx.lineTo(b.x,b.y+b.height/2);
+        ctx.closePath();
+        ctx.fill();
+    });
+}
+
+function drawBullets(){
+    ctx.fillStyle='yellow';
+    player.bullets.forEach(b=>ctx.fillRect(b.x,b.y,5,5));
+}
+
+function drawHUD(){
+    const hud = document.getElementById('hud');
+    hud.innerHTML=`Score: ${score}<br>Money: ${money}<br>Weapon: ${player.weapon}`;
+}
+
+// ===== Update =====
+function update(){
+    // Move player left/right
+    if(keys['a']) player.x -= player.speed;
+    if(keys['d']) player.x += player.speed;
+    player.x = Math.max(player.width/2, Math.min(canvas.width-player.width/2, player.x));
+
+    // Move bullets
+    for(let i=player.bullets.length-1;i>=0;i--){
+        const b = player.bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        if(b.x<0 || b.x>canvas.width || b.y<0 || b.y>canvas.height) player.bullets.splice(i,1);
+    }
+
+    // Move blocks
+    for(let i=blocks.length-1;i>=0;i--){
+        const b=blocks[i];
+        b.y += b.speed;
+
+        // Collision with bullets
+        for(let j=player.bullets.length-1;j>=0;j--){
+            const bl = player.bullets[j];
+            if(bl.x < b.x+b.width &&
+               bl.x+5 > b.x &&
+               bl.y < b.y+b.height &&
+               bl.y+5 > b.y){
+                   blocks.splice(i,1);
+                   player.bullets.splice(j,1);
+                   score +=10;
+                   if(score % 100 === 0) money += 100;
+                   break;
+            }
+        }
+
+        if(b.y>canvas.height) blocks.splice(i,1);
+    }
+
+    // Spawn new blocks
+    if(Math.random()<0.02) spawnBlock();
+
+    // Draw everything
+    ctx.fillStyle='black';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    drawStars();
+    drawBlocks();
+    drawPlayer();
+    drawBullets();
+    drawHUD();
+    
+    requestAnimationFrame(update);
+}
+
+update();
+updateInventory();
+
+//# sourceURL=userscript.js
+</script>
+</body>
+</html>
